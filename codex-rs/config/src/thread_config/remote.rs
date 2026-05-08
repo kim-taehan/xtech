@@ -283,6 +283,9 @@ fn proto_string_map(values: HashMap<String, String>) -> proto::StringMap {
 fn proto_wire_api(wire_api: WireApi) -> proto::WireApi {
     match wire_api {
         WireApi::Responses => proto::WireApi::Responses,
+        // The Chat variant is fork-restored locally and has no proto encoding;
+        // the upstream remote thread-config protocol only knows Responses.
+        WireApi::Chat => unreachable!("WireApi::Chat is not transmitted over remote thread config"),
     }
 }
 

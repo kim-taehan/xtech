@@ -35,7 +35,7 @@ async fn state_db_for_test_with_sqlite_home(
         codex_home: codex_home.to_path_buf(),
         sqlite_home: sqlite_home.to_path_buf(),
         cwd: codex_home.to_path_buf(),
-        model_provider_id: "openai".to_string(),
+        model_provider_id: codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID.to_string(),
         generate_memories: false,
     };
     codex_rollout::state_db::try_init(&config)

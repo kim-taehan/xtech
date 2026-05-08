@@ -141,7 +141,6 @@ use std::path::PathBuf;
 use supports_color::Stream;
 use tokio::sync::mpsc;
 use tracing::Instrument;
-use tracing::error;
 use tracing::field;
 use tracing::info;
 use tracing::info_span;
@@ -382,7 +381,9 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         None // No OSS mode enabled
     };
 
-    // When using `--oss`, let the bootstrapper pick the model based on selected provider
+    // When using `--oss`, let the bootstrapper pick the model based on selected provider.
+    // Fork-only: `CODEX_OSS_MODEL` (typically populated from `codex-fork.json`) wins
+    // over the bundled picker default but loses to an explicit `-m` flag.
     let model = if let Some(model) = model_cli_arg {
         Some(model)
     } else if oss {
@@ -391,7 +392,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
             .and_then(|provider_id| get_default_model_for_oss_provider(provider_id))
             .map(std::borrow::ToOwned::to_owned)
     } else {
-        None // No model specified, will use the default.
+        codex_utils_oss::fork_model_override()
     };
 
     // Load configuration and determine approval policy
@@ -559,8 +560,8 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
         images,
         json_mode,
         last_message_file,
-        model_provider,
-        oss,
+        model_provider: _model_provider,
+        oss: _oss,
         output_schema_path,
         prompt,
         skip_git_repo_check,
@@ -575,19 +576,12 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
             last_message_file.clone(),
         )),
     };
-    if oss {
-        // We're in the oss section, so provider_id should be Some
-        // Let's handle None case gracefully though just in case
-        let provider_id = match model_provider.as_ref() {
-            Some(id) => id,
-            None => {
-                error!("OSS provider unexpectedly not set when oss flag is used");
-                return Err(anyhow::anyhow!(
-                    "OSS provider not set but oss flag was used"
-                ));
-            }
-        };
-        ensure_oss_provider_ready(provider_id, &config)
+    if matches!(
+        config.model_provider_id.as_str(),
+        LMSTUDIO_OSS_PROVIDER_ID | OLLAMA_OSS_PROVIDER_ID
+    ) {
+        let provider_id = config.model_provider_id.clone();
+        ensure_oss_provider_ready(&provider_id, &config)
             .await
             .map_err(|e| anyhow::anyhow!("OSS setup failed: {e}"))?;
     }

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Drop a starter ~/.config/xtech/xtech.json if the target user doesn't have one.
+# Runs as root during pkg install; we resolve the actual logged-in user via
+# /dev/console because $HOME is root's home in this context.
+
+set -eu
+
+TARGET_USER="$(stat -f%Su /dev/console 2>/dev/null || true)"
+if [[ -z "${TARGET_USER}" || "${TARGET_USER}" == "root" ]]; then
+  echo "postinstall: could not determine console user; skipping xtech.json setup"
+  exit 0
+fi
+
+TARGET_HOME="$(dscl . -read "/Users/${TARGET_USER}" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+if [[ -z "${TARGET_HOME}" || ! -d "${TARGET_HOME}" ]]; then
+  echo "postinstall: could not resolve home for ${TARGET_USER}; skipping"
+  exit 0
+fi
+
+XDG_CONFIG_DIR="${TARGET_HOME}/.config"
+CODEX_DIR="${XDG_CONFIG_DIR}/xtech"
+TARGET_JSON="${CODEX_DIR}/xtech.json"
+
+# Create as the target user so newly-made dirs aren't owned by root.
+sudo -u "${TARGET_USER}" mkdir -p "${CODEX_DIR}"
+
+if [[ -f "${TARGET_JSON}" ]]; then
+  echo "postinstall: ${TARGET_JSON} already exists; leaving it alone"
+  exit 0
+fi
+
+cat > "${TARGET_JSON}" <<'JSON'
+{
+  "_comment": "xtech remote-gateway config. Fill in all three fields before running xtech.",
+  "baseURL": "",
+  "apiKey":  "",
+  "model":   ""
+}
+JSON
+
+chown "${TARGET_USER}" "${TARGET_JSON}"
+chmod 600 "${TARGET_JSON}"
+
+echo "postinstall: wrote ${TARGET_JSON} (owner=${TARGET_USER}, mode=600)"
+echo "postinstall: edit the apiKey field to your own gateway token before running xtech."
+exit 0

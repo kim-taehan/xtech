@@ -148,6 +148,7 @@ pub use tool_spec::ToolSpec;
 pub use tool_spec::WebSearchToolOptions;
 pub use tool_spec::create_image_generation_tool;
 pub use tool_spec::create_local_shell_tool;
+pub use tool_spec::create_tools_json_for_chat_completions_api;
 pub use tool_spec::create_tools_json_for_responses_api;
 pub use tool_spec::create_web_search_tool;
 pub use utility_tool::create_test_sync_tool;

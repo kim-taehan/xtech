@@ -163,6 +163,42 @@ pub fn create_tools_json_for_responses_api(
     Ok(tools_json)
 }
 
+/// Returns JSON values that match the Chat Completions function-calling shape
+/// (`{type: "function", function: {name, description, parameters}}`).
+///
+/// Restored on this fork for the legacy Chat Completions wire path. Built on
+/// top of `create_tools_json_for_responses_api` so future ToolSpec variants
+/// flow through automatically; non-`function` shapes (web_search,
+/// image_generation, namespace, custom freeform) have no Chat Completions
+/// equivalent and are dropped.
+pub fn create_tools_json_for_chat_completions_api(
+    tools: &[ToolSpec],
+) -> Result<Vec<Value>, serde_json::Error> {
+    let responses_api_tools_json = create_tools_json_for_responses_api(tools)?;
+    let tools_json = responses_api_tools_json
+        .into_iter()
+        .filter_map(|mut tool| {
+            if tool.get("type") != Some(&Value::String("function".to_string())) {
+                return None;
+            }
+
+            let map = tool.as_object_mut()?;
+            let name = map
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            map.remove("type");
+            Some(serde_json::json!({
+                "type": "function",
+                "name": name,
+                "function": map,
+            }))
+        })
+        .collect::<Vec<Value>>();
+    Ok(tools_json)
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ResponsesApiWebSearchFilters {
     #[serde(skip_serializing_if = "Option::is_none")]

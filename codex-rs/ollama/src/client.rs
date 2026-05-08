@@ -78,6 +78,13 @@ impl OllamaClient {
     }
 
     /// Probe whether the server is reachable by hitting the appropriate health endpoint.
+    ///
+    /// Any HTTP response (including 401/403/404) is treated as success: the
+    /// transport layer reached a server, so connection-level failure is the only
+    /// thing this probe needs to flag. Auth and route differences are surfaced
+    /// later when the actual `/v1/responses` request fires. This keeps remote
+    /// OpenAI-compatible gateways (which gate `/v1/models` behind auth and do
+    /// not expose Ollama's `/api/tags`) usable as the default provider.
     async fn probe_server(&self) -> io::Result<()> {
         let url = if self.uses_openai_compat {
             format!("{}/v1/models", self.host_root.trim_end_matches('/'))
@@ -88,16 +95,14 @@ impl OllamaClient {
             tracing::warn!("Failed to connect to Ollama server: {err:?}");
             io::Error::other(OLLAMA_CONNECTION_ERROR)
         })?;
-        if resp.status().is_success() {
-            Ok(())
-        } else {
-            tracing::warn!(
-                "Failed to probe server at {}: HTTP {}",
+        if !resp.status().is_success() {
+            tracing::debug!(
+                "Probe at {} returned HTTP {} — treating as reachable.",
                 self.host_root,
                 resp.status()
             );
-            Err(io::Error::other(OLLAMA_CONNECTION_ERROR))
         }
+        Ok(())
     }
 
     /// Return the list of model names known to the local Ollama instance.
@@ -395,20 +400,46 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_try_from_oss_provider_err_when_server_missing() {
+    async fn test_try_from_oss_provider_err_when_server_unreachable() {
         if std::env::var(codex_core::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok() {
             tracing::info!(
-                "{} set; skipping test_try_from_oss_provider_err_when_server_missing",
+                "{} set; skipping test_try_from_oss_provider_err_when_server_unreachable",
                 codex_core::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR
             );
             return;
         }
 
-        let server = wiremock::MockServer::start().await;
-        let err = OllamaClient::try_from_provider_with_base_url(&format!("{}/v1", server.uri()))
+        // Port 1 has no listener; the connect attempt yields a transport error
+        // that the probe must surface as OLLAMA_CONNECTION_ERROR.
+        let err = OllamaClient::try_from_provider_with_base_url("http://127.0.0.1:1/v1")
             .await
             .err()
-            .expect("expected error");
+            .expect("expected connection error");
         assert_eq!(OLLAMA_CONNECTION_ERROR, err.to_string());
+    }
+
+    #[tokio::test]
+    async fn test_probe_treats_http_response_as_reachable() {
+        if std::env::var(codex_core::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok() {
+            tracing::info!(
+                "{} set; skipping test_probe_treats_http_response_as_reachable",
+                codex_core::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR
+            );
+            return;
+        }
+
+        // Simulate an OpenAI-compatible gateway that gates /v1/models behind auth
+        // and answers 401 to unauthenticated probes (e.g. the nginx-fronted
+        // setup the user is testing against).
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/v1/models"))
+            .respond_with(wiremock::ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+
+        OllamaClient::try_from_provider_with_base_url(&format!("{}/v1", server.uri()))
+            .await
+            .expect("401 should be treated as reachable; only transport errors are fatal");
     }
 }

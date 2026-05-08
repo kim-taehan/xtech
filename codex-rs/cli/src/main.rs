@@ -743,6 +743,11 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
+    // Fork-only: load `~/.codex/codex-fork.json` (or $CODEX_FORK_CONFIG) and
+    // export baseURL / apiKey / model as the matching env vars before any
+    // provider/config wiring reads them.
+    codex_utils_oss::apply_fork_config_to_env();
+
     let MultitoolCli {
         config_overrides: mut root_config_overrides,
         feature_toggles,

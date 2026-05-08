@@ -45,6 +45,8 @@ use codex_exec_server::ExecServerRuntimePaths;
 use codex_login::AuthConfig;
 use codex_login::default_client::set_default_client_residency_requirement;
 use codex_login::enforce_login_restrictions;
+use codex_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
+use codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use codex_protocol::ThreadId;
 use codex_protocol::config_types::AltScreenMode;
 use codex_protocol::config_types::SandboxMode;
@@ -835,7 +837,9 @@ pub async fn run_main(
         None
     };
 
-    // When using `--oss`, let the bootstrapper pick the model based on selected provider
+    // When using `--oss`, let the bootstrapper pick the model based on selected provider.
+    // Fork-only: `CODEX_OSS_MODEL` (typically populated from `codex-fork.json`) wins
+    // over the bundled picker default but loses to an explicit `-m` flag.
     let model = if let Some(model) = &cli.model {
         Some(model.clone())
     } else if cli.oss {
@@ -845,7 +849,7 @@ pub async fn run_main(
             .and_then(|provider_id| get_default_model_for_oss_provider(provider_id))
             .map(std::borrow::ToOwned::to_owned)
     } else {
-        None // No model specified, will use the default.
+        codex_utils_oss::fork_model_override()
     };
 
     let additional_dirs = cli.add_dir.clone();
@@ -1005,19 +1009,12 @@ pub async fn run_main(
     let feedback_layer = feedback.logger_layer();
     let feedback_metadata_layer = feedback.metadata_layer();
 
-    if cli.oss && model_provider_override.is_some() {
-        // We're in the oss section, so provider_id should be Some
-        // Let's handle None case gracefully though just in case
-        let provider_id = match model_provider_override.as_ref() {
-            Some(id) => id,
-            None => {
-                error!("OSS provider unexpectedly not set when oss flag is used");
-                return Err(std::io::Error::other(
-                    "OSS provider not set but oss flag was used",
-                ));
-            }
-        };
-        ensure_oss_provider_ready(provider_id, &config).await?;
+    if matches!(
+        config.model_provider_id.as_str(),
+        LMSTUDIO_OSS_PROVIDER_ID | OLLAMA_OSS_PROVIDER_ID
+    ) {
+        let provider_id = config.model_provider_id.clone();
+        ensure_oss_provider_ready(&provider_id, &config).await?;
     }
 
     let otel = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

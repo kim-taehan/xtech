@@ -33,6 +33,8 @@ use std::sync::atomic::Ordering;
 
 use codex_api::ApiError;
 use codex_api::AuthProvider;
+use codex_api::ChatClient as ApiChatClient;
+use codex_api::ChatRequestBuilder;
 use codex_api::CompactClient as ApiCompactClient;
 use codex_api::CompactionInput as ApiCompactionInput;
 use codex_api::Compression;
@@ -84,6 +86,7 @@ use codex_protocol::protocol::W3cTraceContext;
 use codex_rollout_trace::CompactionTraceContext;
 use codex_rollout_trace::InferenceTraceAttempt;
 use codex_rollout_trace::InferenceTraceContext;
+use codex_tools::create_tools_json_for_chat_completions_api;
 use codex_tools::create_tools_json_for_responses_api;
 use eventsource_stream::Event;
 use eventsource_stream::EventStreamError;
@@ -1539,6 +1542,121 @@ impl ModelClientSession {
                     inference_trace,
                 )
                 .await
+            }
+            WireApi::Chat => {
+                self.stream_chat_completions_api(
+                    prompt,
+                    model_info,
+                    session_telemetry,
+                    inference_trace,
+                )
+                .await
+            }
+        }
+    }
+
+    /// Streams a turn via the legacy Chat Completions API.
+    ///
+    /// Used when the configured provider has `wire_api = "chat"`. This fork
+    /// restores the path so internal nginx-fronted Qwen-style gateways (which
+    /// only expose `/v1/chat/completions`) work end-to-end. Reasoning items,
+    /// `previous_response_id`, and the `text`/`output_schema` controls are not
+    /// supported on this transport — Chat Completions has no equivalent —
+    /// and `effort` / `summary` / `service_tier` are silently ignored.
+    async fn stream_chat_completions_api(
+        &self,
+        prompt: &Prompt,
+        model_info: &ModelInfo,
+        session_telemetry: &SessionTelemetry,
+        inference_trace: &InferenceTraceContext,
+    ) -> Result<ResponseStream> {
+        if prompt.output_schema.is_some() {
+            return Err(CodexErr::UnsupportedOperation(
+                "output_schema is not supported on the Chat Completions wire_api".to_string(),
+            ));
+        }
+
+        let auth_manager = self.client.state.provider.auth_manager();
+        let mut auth_recovery = auth_manager
+            .as_ref()
+            .map(AuthManager::unauthorized_recovery);
+        let mut pending_retry = PendingUnauthorizedRetry::default();
+
+        let instructions = prompt.base_instructions.text.clone();
+        let input_items = prompt.get_formatted_input();
+        let tools_json = create_tools_json_for_chat_completions_api(&prompt.tools)?;
+        let conversation_id = self.client.state.conversation_id.to_string();
+        let session_source = self.client.state.session_source.clone();
+        let model_slug = model_info.slug.clone();
+
+        loop {
+            let client_setup = self.client.current_client_setup().await?;
+            let transport = ReqwestTransport::new(build_reqwest_client());
+            let request_auth_context = AuthRequestTelemetryContext::new(
+                client_setup.auth.as_ref().map(CodexAuth::auth_mode),
+                client_setup.api_auth.as_ref(),
+                pending_retry,
+            );
+            let (request_telemetry, sse_telemetry) = Self::build_streaming_telemetry(
+                session_telemetry,
+                request_auth_context,
+                RequestRouteTelemetry::for_endpoint("chat/completions"),
+                self.client.state.auth_env_telemetry.clone(),
+            );
+
+            let chat_request =
+                ChatRequestBuilder::new(&model_slug, &instructions, &input_items, &tools_json)
+                    .conversation_id(Some(conversation_id.clone()))
+                    .session_source(Some(session_source.clone()))
+                    .build(&client_setup.api_provider)
+                    .map_err(map_api_error)?;
+
+            let inference_trace_attempt = inference_trace.start_attempt();
+            let client =
+                ApiChatClient::new(transport, client_setup.api_provider, client_setup.api_auth)
+                    .with_telemetry(Some(request_telemetry), Some(sse_telemetry));
+            let stream_result = client.stream_request(chat_request).await;
+
+            match stream_result {
+                Ok(stream) => {
+                    let (stream, _) = map_response_stream(
+                        stream,
+                        session_telemetry.clone(),
+                        inference_trace_attempt,
+                    );
+                    return Ok(stream);
+                }
+                Err(ApiError::Transport(
+                    unauthorized_transport @ TransportError::Http { status, .. },
+                )) if status == StatusCode::UNAUTHORIZED => {
+                    let response_debug_context =
+                        extract_response_debug_context(&unauthorized_transport);
+                    inference_trace_attempt.record_failed(
+                        &unauthorized_transport,
+                        response_debug_context.request_id.as_deref(),
+                        /*output_items*/ &[],
+                    );
+                    pending_retry = PendingUnauthorizedRetry::from_recovery(
+                        handle_unauthorized(
+                            unauthorized_transport,
+                            &mut auth_recovery,
+                            session_telemetry,
+                        )
+                        .await?,
+                    );
+                    continue;
+                }
+                Err(err) => {
+                    let response_debug_context =
+                        extract_response_debug_context_from_api_error(&err);
+                    let err = map_api_error(err);
+                    inference_trace_attempt.record_failed(
+                        &err,
+                        response_debug_context.request_id.as_deref(),
+                        /*output_items*/ &[],
+                    );
+                    return Err(err);
+                }
             }
         }
     }

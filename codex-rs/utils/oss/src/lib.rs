@@ -4,6 +4,9 @@ use codex_core::config::Config;
 use codex_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
 use codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 
+pub use codex_ollama::apply_fork_config_to_env;
+pub use codex_ollama::fork_model_override;
+
 /// Returns the default model for a given OSS provider.
 pub fn get_default_model_for_oss_provider(provider_id: &str) -> Option<&'static str> {
     match provider_id {
