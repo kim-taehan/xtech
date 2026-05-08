@@ -31,10 +31,21 @@ fi
 
 cat > "${TARGET_JSON}" <<'JSON'
 {
-  "_comment": "xtech remote-gateway config. Fill in all three fields before running xtech.",
+  "_comment": "xtech remote-gateway config. Fill in baseURL/apiKey and at least one entry under models. defaultModel is optional; if omitted the first entry is used.",
   "baseURL": "",
   "apiKey":  "",
-  "model":   ""
+  "defaultModel": "",
+  "models": [
+    "qwen3.5-122b"
+  ],
+  "_models_example_with_overrides": [
+    "qwen3.5-122b",
+    {
+      "name": "deepseek-33b",
+      "baseURL": "http://other-gateway/v1",
+      "apiKey":  "sk-other"
+    }
+  ]
 }
 JSON
 

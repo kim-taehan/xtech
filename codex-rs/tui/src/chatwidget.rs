@@ -9357,6 +9357,16 @@ impl ChatWidget {
         {
             mask.model = Some(model.to_string());
         }
+        // Fork-only: if the picked model is declared in xtech.json with its
+        // own baseURL/apiKey, swap the env vars and patch the in-memory
+        // provider so the next turn routes to the new gateway.
+        if codex_utils_oss::fork_model_by_name(model).is_some() {
+            let (resolved_base_url, _resolved_api_key) =
+                codex_utils_oss::apply_runtime_model_override(model);
+            if let Some(base_url) = resolved_base_url {
+                self.config.model_provider.base_url = Some(base_url);
+            }
+        }
         self.refresh_model_dependent_surfaces();
     }
 

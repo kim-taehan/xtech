@@ -223,6 +223,48 @@ enum ThreadInteractiveRequest {
     McpServerElicitation(McpServerElicitationFormRequest),
 }
 
+/// Fork-only: append models declared in `xtech.json` to the bootstrap-supplied
+/// catalog. Each fork model is cloned from a representative bundled preset so
+/// reasoning levels, personality support, and other capabilities stay
+/// consistent. Duplicates (by slug) are skipped.
+fn inject_fork_models(available: &mut Vec<ModelPreset>) {
+    let fork_models = codex_utils_oss::fork_models();
+    if fork_models.is_empty() {
+        return;
+    }
+    // Use the first picker-visible non-auto preset as the template — typically
+    // the bundled qwen entry. Fall back to the first preset of any kind.
+    let template_idx = available
+        .iter()
+        .position(|p| p.show_in_picker && !p.model.starts_with("codex-auto-"))
+        .or_else(|| available.iter().position(|p| p.show_in_picker))
+        .or(if available.is_empty() { None } else { Some(0) });
+    let Some(idx) = template_idx else {
+        return;
+    };
+    let template = available[idx].clone();
+    for fm in fork_models {
+        if available.iter().any(|p| p.model == fm.name) {
+            continue;
+        }
+        let mut preset = template.clone();
+        preset.id = format!("fork:{}", fm.name);
+        preset.model = fm.name.clone();
+        preset.display_name = fm.name.clone();
+        preset.description = match (fm.base_url.as_deref(), fm.api_key.as_deref()) {
+            (Some(_), _) | (_, Some(_)) => {
+                format!("{} (custom gateway)", fm.name)
+            }
+            _ => format!("{} (xtech.json)", fm.name),
+        };
+        preset.is_default = false;
+        preset.show_in_picker = true;
+        preset.upgrade = None;
+        preset.availability_nux = None;
+        available.push(preset);
+    }
+}
+
 /// Extracts `receiver_thread_ids` from collab agent tool-call notifications.
 ///
 /// Only `ItemStarted` and `ItemCompleted` notifications with a `CollabAgentToolCall` item carry
@@ -664,7 +706,10 @@ impl App {
         };
         let bootstrap = app_server.bootstrap(&config).await?;
         let mut model = bootstrap.default_model;
-        let available_models = bootstrap.available_models;
+        let mut available_models = bootstrap.available_models;
+        // Fork-only: append models declared in xtech.json (cloned from a
+        // base preset so reasoning/personality/etc. stay consistent).
+        inject_fork_models(&mut available_models);
         let exit_info = handle_model_migration_prompt_if_needed(
             tui,
             &mut config,

@@ -5,10 +5,16 @@ mod pull;
 mod url;
 
 pub use client::OllamaClient;
-pub use fork_config::apply_fork_config_to_env;
-pub use fork_config::fork_model_override;
 use codex_core::config::Config;
 use codex_model_provider_info::ModelProviderInfo;
+pub use fork_config::ForkConfigSnapshot;
+pub use fork_config::ForkModel;
+pub use fork_config::apply_fork_config_to_env;
+pub use fork_config::apply_runtime_model_override;
+pub use fork_config::fork_config_snapshot;
+pub use fork_config::fork_model_by_name;
+pub use fork_config::fork_model_override;
+pub use fork_config::fork_models;
 pub use pull::CliProgressReporter;
 pub use pull::PullEvent;
 pub use pull::PullProgressReporter;
