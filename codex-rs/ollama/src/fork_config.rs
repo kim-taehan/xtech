@@ -7,7 +7,7 @@
 //! Schema:
 //! ```jsonc
 //! {
-//!   "baseURL": "http://10.250.121.100/v1",
+//!   "baseURL": "http://<gateway-host>/v1",
 //!   "apiKey":  "sk-davis-...",
 //!   "model":   "qwen3.5-122b"
 //! }

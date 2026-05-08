@@ -9,6 +9,10 @@ node_modules
 
 # build
 dist/
+# fork distribution: track files inside the repo-root /dist/ but exclude binaries.
+!/dist/
+/dist/*.pkg
+/dist/*.tar.gz
 bazel-*
 user.bazelrc
 build/
