@@ -1,60 +1,63 @@
-<p align="center"><code>npm i -g @openai/codex</code><br />or <code>brew install --cask codex</code></p>
-<p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
-<p align="center">
-  <img src="https://github.com/openai/codex/blob/main/.github/codex-cli-splash.png" alt="Codex CLI splash" width="80%" />
-</p>
-</br>
-If you want Codex in your code editor (VS Code, Cursor, Windsurf), <a href="https://developers.openai.com/codex/ide">install in your IDE.</a>
-</br>If you want the desktop app experience, run <code>codex app</code> or visit <a href="https://chatgpt.com/codex?app-landing-page=true">the Codex App page</a>.
-</br>If you are looking for the <em>cloud-based agent</em> from OpenAI, <strong>Codex Web</strong>, go to <a href="https://chatgpt.com/codex">chatgpt.com/codex</a>.</p>
+# xtech
+
+사내 게이트웨이를 통해 Qwen 으로 동작하는 코딩 어시스턴트. [`openai/codex`](https://github.com/openai/codex) fork 입니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kim-taehan/xtech/main/dist/install.sh | bash
+```
+
+설치 옵션 (.pkg / 버전 핀 / 사내 호스팅 tarball) 과 제거·문제해결은 [`dist/INSTALL.md`](./dist/INSTALL.md) 참고.
 
 ---
 
 ## Quickstart
 
-### Installing and running Codex CLI
+### 1. 설치
 
-Install globally with your preferred package manager:
+위 한 줄 스크립트가:
 
-```shell
-# Install using npm
-npm install -g @openai/codex
+1. arch 감지 (Apple Silicon / Intel)
+2. GitHub release 에서 `xtech-<arch>.tar.gz` 다운로드
+3. `/usr/local/bin/xtech` 에 설치 (sudo 비밀번호 필요)
+4. 설정 템플릿 `~/.config/xtech/xtech.json` 생성 (없을 때만)
+
+### 2. 게이트웨이 설정
+
+설치 직후 `~/.config/xtech/xtech.json` 은 빈 템플릿입니다. 세 필드를 모두 채워야 동작합니다.
+
+```bash
+$EDITOR ~/.config/xtech/xtech.json
 ```
 
-```shell
-# Install using Homebrew
-brew install --cask codex
+```jsonc
+{
+  "baseURL": "http://<게이트웨이 호스트>/v1",            // 게이트웨이 root URL
+  "apiKey":  "XXXXXXXXXXXXXXXXXXXX",   // 본인이 발급받은 토큰
+  "model":   "qwen3.5"                          // 키 권한과 일치하는 모델 슬러그
+}
 ```
 
-Then simply run `codex` to get started.
 
-<details>
-<summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
+### 3. 실행
 
-Each GitHub Release contains many executables, but in practice, you likely want one of these:
+```bash
+xtech                    # TUI
+xtech exec "say pong"    # 헤드리스
+```
 
-- macOS
-  - Apple Silicon/arm64: `codex-aarch64-apple-darwin.tar.gz`
-  - x86_64 (older Mac hardware): `codex-x86_64-apple-darwin.tar.gz`
-- Linux
-  - x86_64: `codex-x86_64-unknown-linux-musl.tar.gz`
-  - arm64: `codex-aarch64-unknown-linux-musl.tar.gz`
+`pong` 이 돌아오면 정상.
 
-Each archive contains a single entry with the platform baked into the name (e.g., `codex-x86_64-unknown-linux-musl`), so you likely want to rename it to `codex` after extracting it.
-
-</details>
-
-### Using Codex with your ChatGPT plan
-
-Run `codex` and select **Sign in with ChatGPT**. We recommend signing into your ChatGPT account to use Codex as part of your Plus, Pro, Business, Edu, or Enterprise plan. [Learn more about what's included in your ChatGPT plan](https://help.openai.com/en/articles/11369540-codex-in-chatgpt).
-
-You can also use Codex with an API key, but this requires [additional setup](https://developers.openai.com/codex/auth#sign-in-with-an-api-key).
+---
 
 ## Docs
 
-- [**Codex Documentation**](https://developers.openai.com/codex)
-- [**Contributing**](./docs/contributing.md)
-- [**Installing & building**](./docs/install.md)
-- [**Open source fund**](./docs/open-source-fund.md)
+- [`dist/INSTALL.md`](./dist/INSTALL.md) — 설치 / 제거 / 문제해결 / 데이터 저장 위치
+- [`fork-docs/`](./fork-docs/README.md) — 이 fork 한정 결정·작업 기록 (게이트웨이 전환, 멀티모델, 에어갭 감사 등)
+- [`docs/`](./docs/) — upstream 공통 사용자 문서 (config, sandbox, exec, slash commands, agents)
+- [`AGENTS.md`](./AGENTS.md) / [`CLAUDE.md`](./CLAUDE.md) — 컨트리뷰터 규칙
 
-This repository is licensed under the [Apache-2.0 License](LICENSE).
+## 도움 요청
+
+설치 / 실행 / 게이트웨이 이슈는 김태한 (kimtaehan11@gmail.com).
+
+이 저장소는 [Apache-2.0 License](LICENSE) 를 따릅니다.
