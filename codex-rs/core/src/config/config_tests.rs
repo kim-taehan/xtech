@@ -62,6 +62,7 @@ use codex_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
 use codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use codex_model_provider_info::WireApi;
 use codex_models_manager::bundled_models_response;
+use codex_protocol::config_types::ForcedLoginMethod;
 use codex_protocol::models::ActivePermissionProfile;
 use codex_protocol::models::ActivePermissionProfileModification;
 use codex_protocol::models::ManagedFileSystemPermissions;
@@ -6881,7 +6882,7 @@ async fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             compact_prompt: None,
             commit_attribution: None,
             forced_chatgpt_workspace_id: None,
-            forced_login_method: None,
+            forced_login_method: Some(ForcedLoginMethod::Api),
             include_apply_patch_tool: false,
             web_search_mode: Constrained::allow_any(WebSearchMode::Cached),
             web_search_config: None,
@@ -7085,7 +7086,7 @@ async fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         compact_prompt: None,
         commit_attribution: None,
         forced_chatgpt_workspace_id: None,
-        forced_login_method: None,
+        forced_login_method: Some(ForcedLoginMethod::Api),
         include_apply_patch_tool: false,
         web_search_mode: Constrained::allow_any(WebSearchMode::Cached),
         web_search_config: None,
@@ -7243,7 +7244,7 @@ async fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         compact_prompt: None,
         commit_attribution: None,
         forced_chatgpt_workspace_id: None,
-        forced_login_method: None,
+        forced_login_method: Some(ForcedLoginMethod::Api),
         include_apply_patch_tool: false,
         web_search_mode: Constrained::allow_any(WebSearchMode::Cached),
         web_search_config: None,
@@ -7386,7 +7387,7 @@ async fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         compact_prompt: None,
         commit_attribution: None,
         forced_chatgpt_workspace_id: None,
-        forced_login_method: None,
+        forced_login_method: Some(ForcedLoginMethod::Api),
         include_apply_patch_tool: false,
         web_search_mode: Constrained::allow_any(WebSearchMode::Cached),
         web_search_config: None,

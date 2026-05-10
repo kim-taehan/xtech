@@ -85,8 +85,8 @@ async fn first_layer_config_error_from_entries(layers: &[ConfigLayerEntry]) -> O
 ///   `%ProgramData%\OpenAI\Codex\config.toml` (Windows)
 /// - user      `${CODEX_HOME}/config.toml`
 /// - cwd       `${PWD}/config.toml` (loaded but disabled when the directory is untrusted)
-/// - tree      parent directories up to root looking for `./.codex/config.toml` (loaded but disabled when untrusted)
-/// - repo      `$(git rev-parse --show-toplevel)/.codex/config.toml` (loaded but disabled when untrusted)
+/// - tree      parent directories up to root looking for `./.xtech/config.toml`, falling back to `./.codex/config.toml` when only the legacy folder exists (loaded but disabled when untrusted)
+/// - repo      `$(git rev-parse --show-toplevel)/.xtech/config.toml`, falling back to `/.codex/config.toml` when only the legacy folder exists (loaded but disabled when untrusted)
 /// - runtime   e.g., --config flags, model selector in UI
 ///
 /// (*) Only available on macOS via managed device profiles.
@@ -982,15 +982,25 @@ async fn load_project_layers(
     let mut layers = Vec::new();
     let mut startup_warnings = Vec::new();
     for dir in dirs {
-        let dot_codex_abs = dir.join(".codex");
-        if !fs
-            .get_metadata(&dot_codex_abs, /*sandbox*/ None)
-            .await
-            .map(|metadata| metadata.is_directory)
-            .unwrap_or(false)
-        {
-            continue;
+        // Prefer `.xtech/`; fall back to `.codex/` so projects that haven't
+        // migrated still load. Only one folder is consulted per ancestor —
+        // when both exist the legacy `.codex/` is silently ignored.
+        let mut dot_codex_abs = None;
+        for candidate_name in [".xtech", ".codex"] {
+            let candidate = dir.join(candidate_name);
+            if fs
+                .get_metadata(&candidate, /*sandbox*/ None)
+                .await
+                .map(|metadata| metadata.is_directory)
+                .unwrap_or(false)
+            {
+                dot_codex_abs = Some(candidate);
+                break;
+            }
         }
+        let Some(dot_codex_abs) = dot_codex_abs else {
+            continue;
+        };
 
         let decision = trust_context.decision_for_dir(&dir);
         let disabled_reason = trust_context.disabled_reason_for_decision(&decision);

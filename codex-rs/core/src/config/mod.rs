@@ -2770,7 +2770,9 @@ impl Config {
                 }
             });
 
-        let forced_login_method = cfg.forced_login_method;
+        // xtech runs in a closed network with no reachability to auth.openai.com,
+        // so default to API-key login when the user did not pick a method.
+        let forced_login_method = cfg.forced_login_method.or(Some(ForcedLoginMethod::Api));
 
         let model = model.or(config_profile.model).or(cfg.model);
         let mut notices = cfg.notice.unwrap_or_default();
